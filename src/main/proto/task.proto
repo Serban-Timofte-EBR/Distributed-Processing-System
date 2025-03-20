@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package com.distributed.generated;
+
+option java_package = "com.distributed.generated";
+
+service TaskService {
+  rpc ExecuteTask(TaskRequest) returns (TaskResponse);
+}
+
+message TaskRequest {
+  string taskName = 1;
+  repeated string arguments = 2;
+}
+
+message TaskResponse {
+  int32 exitCode = 1;
+  string result = 2;
+}

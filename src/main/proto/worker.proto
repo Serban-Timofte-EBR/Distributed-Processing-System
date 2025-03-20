@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package com.distributed.generated;
+
+option java_package = "com.distributed.generated";
+
+service WorkerService {
+  rpc RegisterWorker(WorkerRegisterRequest) returns (WorkerRegisterResponse);
+}
+
+message WorkerRegisterRequest {
+  string workerId = 1;
+  int32 workerPort = 2;
+}
+
+message WorkerRegisterResponse {
+  string confirmationMessage = 1;
+}
