@@ -19,7 +19,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	// Example task
+	// TODO: Launch multiple tasks from multiple clients
 	taskRequest := "Multiply 5 10\n"
 	fmt.Println("Sent Task:", strings.TrimSpace(taskRequest))
 	_, err = conn.Write([]byte(taskRequest))

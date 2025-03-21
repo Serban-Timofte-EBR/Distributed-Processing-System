@@ -21,14 +21,12 @@ func main() {
 
 	fmt.Println("Task Worker connected.")
 
-	// Register with the server
 	_, err = conn.Write([]byte("REGISTER_WORKER\n"))
 	if err != nil {
 		fmt.Println("Error registering worker:", err)
 		return
 	}
 
-	// Continuously listen for tasks
 	reader := bufio.NewReader(conn)
 	for {
 		task, err := reader.ReadString('\n')
@@ -41,6 +39,7 @@ func main() {
 		fmt.Println("Executing Task:", task)
 
 		result := executeTask(task)
+
 		_, err = conn.Write([]byte(result + "\n"))
 		if err != nil {
 			fmt.Println("Error sending response:", err)

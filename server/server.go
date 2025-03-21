@@ -59,9 +59,6 @@ func registerWorker(conn net.Conn) {
 	workers = append(workers, conn)
 	workerMutex.Unlock()
 	fmt.Println("Worker registered:", conn.RemoteAddr())
-
-	// Keep the worker connection open to continuously listen for tasks
-	go workerListener(conn)
 }
 
 func assignTaskToWorker(task string) string {
@@ -72,7 +69,7 @@ func assignTaskToWorker(task string) string {
 		return "No workers available"
 	}
 
-	worker := workers[0] // Get the first worker (round-robin)
+	worker := workers[0]
 	workers = append(workers[1:], worker)
 
 	_, err := worker.Write([]byte(task + "\n"))
@@ -90,30 +87,4 @@ func assignTaskToWorker(task string) string {
 	}
 
 	return strings.TrimSpace(response)
-}
-
-func workerListener(worker net.Conn) {
-	defer worker.Close()
-
-	reader := bufio.NewReader(worker)
-	for {
-		_, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Println("Worker disconnected:", worker.RemoteAddr())
-			removeWorker(worker)
-			return
-		}
-	}
-}
-
-func removeWorker(worker net.Conn) {
-	workerMutex.Lock()
-	defer workerMutex.Unlock()
-
-	for i, w := range workers {
-		if w == worker {
-			workers = append(workers[:i], workers[i+1:]...)
-			break
-		}
-	}
 }
