@@ -9,7 +9,6 @@ import (
 
 const (
 	serverAddress = "localhost:50051"
-	workerPort    = "50052"
 )
 
 func main() {
@@ -22,11 +21,19 @@ func main() {
 
 	fmt.Println("Task Worker connected.")
 
+	// Register with the server
+	_, err = conn.Write([]byte("REGISTER_WORKER\n"))
+	if err != nil {
+		fmt.Println("Error registering worker:", err)
+		return
+	}
+
+	// Continuously listen for tasks
+	reader := bufio.NewReader(conn)
 	for {
-		// Read task from server
-		task, err := bufio.NewReader(conn).ReadString('\n')
+		task, err := reader.ReadString('\n')
 		if err != nil {
-			fmt.Println("Error reading task:", err)
+			fmt.Println("Worker connection lost:", err)
 			return
 		}
 
@@ -34,7 +41,11 @@ func main() {
 		fmt.Println("Executing Task:", task)
 
 		result := executeTask(task)
-		conn.Write([]byte(result + "\n"))
+		_, err = conn.Write([]byte(result + "\n"))
+		if err != nil {
+			fmt.Println("Error sending response:", err)
+			return
+		}
 	}
 }
 

@@ -32,26 +32,36 @@ func main() {
 			continue
 		}
 
-		go handleClient(conn)
+		go handleConnection(conn)
 	}
 }
 
-func handleClient(clientConn net.Conn) {
-	defer clientConn.Close()
-
-	reader := bufio.NewReader(clientConn)
-	taskRequest, err := reader.ReadString('\n')
+func handleConnection(conn net.Conn) {
+	reader := bufio.NewReader(conn)
+	message, err := reader.ReadString('\n')
 	if err != nil {
-		fmt.Println("Error reading from client:", err)
+		fmt.Println("Error reading:", err)
+		conn.Close()
 		return
 	}
+	message = strings.TrimSpace(message)
 
-	taskRequest = strings.TrimSpace(taskRequest)
-	fmt.Println("Received Task:", taskRequest)
+	if message == "REGISTER_WORKER" {
+		registerWorker(conn)
+	} else {
+		result := assignTaskToWorker(message)
+		conn.Write([]byte(result + "\n"))
+	}
+}
 
-	// Assign task to an available worker
-	result := assignTaskToWorker(taskRequest)
-	clientConn.Write([]byte(result + "\n"))
+func registerWorker(conn net.Conn) {
+	workerMutex.Lock()
+	workers = append(workers, conn)
+	workerMutex.Unlock()
+	fmt.Println("Worker registered:", conn.RemoteAddr())
+
+	// Keep the worker connection open to continuously listen for tasks
+	go workerListener(conn)
 }
 
 func assignTaskToWorker(task string) string {
@@ -62,21 +72,48 @@ func assignTaskToWorker(task string) string {
 		return "No workers available"
 	}
 
-	worker := workers[0]
-	workers = append(workers[1:], worker) // Round-robin worker selection
+	worker := workers[0] // Get the first worker (round-robin)
+	workers = append(workers[1:], worker)
 
 	_, err := worker.Write([]byte(task + "\n"))
 	if err != nil {
 		fmt.Println("Error sending task to worker:", err)
+		worker.Close()
 		return "Worker communication failed"
 	}
 
-	response, _ := bufio.NewReader(worker).ReadString('\n')
+	response, err := bufio.NewReader(worker).ReadString('\n')
+	if err != nil {
+		fmt.Println("Error reading response from worker:", err)
+		worker.Close()
+		return "Worker response failed"
+	}
+
 	return strings.TrimSpace(response)
 }
 
-func registerWorker(conn net.Conn) {
+func workerListener(worker net.Conn) {
+	defer worker.Close()
+
+	reader := bufio.NewReader(worker)
+	for {
+		_, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("Worker disconnected:", worker.RemoteAddr())
+			removeWorker(worker)
+			return
+		}
+	}
+}
+
+func removeWorker(worker net.Conn) {
 	workerMutex.Lock()
-	workers = append(workers, conn)
-	workerMutex.Unlock()
+	defer workerMutex.Unlock()
+
+	for i, w := range workers {
+		if w == worker {
+			workers = append(workers[:i], workers[i+1:]...)
+			break
+		}
+	}
 }

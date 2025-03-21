@@ -28,7 +28,6 @@ func main() {
 		return
 	}
 
-	// Read server response
 	response, _ := bufio.NewReader(conn).ReadString('\n')
 	fmt.Println("Response:", strings.TrimSpace(response))
 }
