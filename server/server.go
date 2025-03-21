@@ -14,6 +14,8 @@ const (
 
 var workers []net.Conn
 var workerMutex sync.Mutex
+var taskQueue []string
+var queueMutex sync.Mutex
 
 func main() {
 	listener, err := net.Listen("tcp", ":"+serverPort)
@@ -38,19 +40,34 @@ func main() {
 
 func handleConnection(conn net.Conn) {
 	reader := bufio.NewReader(conn)
-	message, err := reader.ReadString('\n')
-	if err != nil {
-		fmt.Println("Error reading:", err)
-		conn.Close()
-		return
-	}
-	message = strings.TrimSpace(message)
 
-	if message == "REGISTER_WORKER" {
-		registerWorker(conn)
-	} else {
-		result := assignTaskToWorker(message)
-		conn.Write([]byte(result + "\n"))
+	for {
+		message, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("Connection closed:", err)
+			conn.Close()
+			return
+		}
+		message = strings.TrimSpace(message)
+
+		if message == "REGISTER_WORKER" {
+			registerWorker(conn)
+		} else if message == "REQUEST_TASK" {
+			fmt.Println("Worker requested a task.")
+
+			task := getNextTask()
+
+			_, err := conn.Write([]byte(task + "\n"))
+			if err != nil {
+				fmt.Println("Error sending task to worker:", err)
+				conn.Close()
+				return
+			}
+
+			fmt.Println("Sent task to worker:", task)
+		} else {
+			addTaskToQueue(message)
+		}
 	}
 }
 
@@ -61,30 +78,38 @@ func registerWorker(conn net.Conn) {
 	fmt.Println("Worker registered:", conn.RemoteAddr())
 }
 
-func assignTaskToWorker(task string) string {
-	workerMutex.Lock()
-	defer workerMutex.Unlock()
+func addTaskToQueue(task string) {
+	queueMutex.Lock()
+	defer queueMutex.Unlock()
 
-	if len(workers) == 0 {
-		return "No workers available"
+	if strings.TrimSpace(task) == "" {
+		fmt.Println("Error: Received empty task. Ignoring.")
+		return
 	}
 
-	worker := workers[0]
-	workers = append(workers[1:], worker)
+	fmt.Println("Task added to queue:", task)
+	taskQueue = append(taskQueue, task)
+}
 
-	_, err := worker.Write([]byte(task + "\n"))
-	if err != nil {
-		fmt.Println("Error sending task to worker:", err)
-		worker.Close()
-		return "Worker communication failed"
+func getNextTask() string {
+	queueMutex.Lock()
+	defer queueMutex.Unlock()
+
+	fmt.Println("Worker requested a task. Current queue size:", len(taskQueue))
+
+	if len(taskQueue) == 0 {
+		fmt.Println("Worker requested a task, but queue is empty.")
+		return "NO_TASK"
 	}
 
-	response, err := bufio.NewReader(worker).ReadString('\n')
-	if err != nil {
-		fmt.Println("Error reading response from worker:", err)
-		worker.Close()
-		return "Worker response failed"
+	task := taskQueue[0]
+	taskQueue = taskQueue[1:]
+
+	fmt.Println("Assigning task to worker:", task)
+	if task == "" {
+		fmt.Println("Error: Task is empty! Assigning NO_TASK.")
+		return "NO_TASK"
 	}
 
-	return strings.TrimSpace(response)
+	return task
 }

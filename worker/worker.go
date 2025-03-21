@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 )
 
 const (
@@ -28,7 +29,16 @@ func main() {
 	}
 
 	reader := bufio.NewReader(conn)
+
 	for {
+		fmt.Println("Worker requesting task from server...")
+
+		_, err = conn.Write([]byte("REQUEST_TASK\n"))
+		if err != nil {
+			fmt.Println("Error requesting task:", err)
+			return
+		}
+
 		task, err := reader.ReadString('\n')
 		if err != nil {
 			fmt.Println("Worker connection lost:", err)
@@ -36,9 +46,19 @@ func main() {
 		}
 
 		task = strings.TrimSpace(task)
-		fmt.Println("Executing Task:", task)
 
+		fmt.Println("Worker received from server:", task) // ✅ Debugging
+
+		if !isValidTask(task) {
+			fmt.Println("Received malformed task. Ignoring.")
+			time.Sleep(time.Second)
+			continue
+		}
+
+		fmt.Println("Executing Task:", task)
 		result := executeTask(task)
+
+		fmt.Println("Sending result back to server:", result)
 
 		_, err = conn.Write([]byte(result + "\n"))
 		if err != nil {
@@ -46,6 +66,14 @@ func main() {
 			return
 		}
 	}
+}
+
+func isValidTask(task string) bool {
+	parts := strings.Fields(task)
+	if len(parts) < 3 {
+		return false
+	}
+	return true
 }
 
 func executeTask(task string) string {
