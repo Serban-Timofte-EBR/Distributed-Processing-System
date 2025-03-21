@@ -26,7 +26,7 @@ func addTaskToQueue(clientConn net.Conn, task string) {
 	queueMutex.Lock()
 	defer queueMutex.Unlock()
 
-	taskID := strconv.Itoa(len(taskResults) + 1) // Simple task ID
+	taskID := strconv.Itoa(len(taskResults) + 1) // TODO: Create a better ID system
 	parts := strings.Fields(task)
 
 	if len(parts) < 3 {
@@ -111,7 +111,7 @@ func getNextTask() Task {
 	defer queueMutex.Unlock()
 
 	if len(taskQueue) == 0 {
-		return Task{} // Empty task
+		return Task{}
 	}
 
 	task := taskQueue[0]

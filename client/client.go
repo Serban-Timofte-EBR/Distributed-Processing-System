@@ -4,11 +4,23 @@ import (
 	"bufio"
 	"fmt"
 	"net"
-	"os"
 	"strings"
+	"sync"
+	"time"
 )
 
-func main() {
+var tasks = []string{
+	"Multiply 3 7",
+	"Multiply 2 8",
+	"Multiply 4 5",
+	"Multiply 10 6",
+	"Multiply 9 2",
+}
+
+// ✅ Sends a task to the server
+func sendTask(task string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	conn, err := net.Dial("tcp", "127.0.0.1:50051")
 	if err != nil {
 		fmt.Println("Error connecting to server:", err)
@@ -16,24 +28,31 @@ func main() {
 	}
 	defer conn.Close()
 
-	fmt.Println("Enter task (e.g., 'Multiply 5 10'):")
-	reader := bufio.NewReader(os.Stdin)
-	task, _ := reader.ReadString('\n')
-	task = strings.TrimSpace(task)
-
 	_, err = conn.Write([]byte(task + "\n"))
 	if err != nil {
 		fmt.Println("Error sending task:", err)
 		return
 	}
 
-	serverReader := bufio.NewReader(conn)
-	result, err := serverReader.ReadString('\n')
+	// ✅ Wait for response from server
+	reader := bufio.NewReader(conn)
+	result, err := reader.ReadString('\n')
 	if err != nil {
 		fmt.Println("Error receiving response:", err)
 		return
 	}
 
-	result = strings.TrimSpace(result)
-	fmt.Println("Received result from server:", result)
+	fmt.Printf("[Client] Sent: %s | Received: %s", task, strings.TrimSpace(result))
+}
+
+func main() {
+	var wg sync.WaitGroup
+
+	for _, task := range tasks {
+		wg.Add(1)
+		go sendTask(task, &wg)
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	wg.Wait()
 }
