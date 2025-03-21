@@ -8,12 +8,8 @@ import (
 	"time"
 )
 
-const (
-	serverAddress = "localhost:50051"
-)
-
 func main() {
-	conn, err := net.Dial("tcp", serverAddress)
+	conn, err := net.Dial("tcp", "127.0.0.1:50051")
 	if err != nil {
 		fmt.Println("Error connecting to server:", err)
 		return
@@ -21,7 +17,6 @@ func main() {
 	defer conn.Close()
 
 	fmt.Println("Task Worker connected.")
-
 	_, err = conn.Write([]byte("REGISTER_WORKER\n"))
 	if err != nil {
 		fmt.Println("Error registering worker:", err)
@@ -32,35 +27,34 @@ func main() {
 
 	for {
 		fmt.Println("Worker requesting task from server...")
-
 		_, err = conn.Write([]byte("REQUEST_TASK\n"))
 		if err != nil {
 			fmt.Println("Error requesting task:", err)
 			return
 		}
 
-		task, err := reader.ReadString('\n')
+		taskLine, err := reader.ReadString('\n')
 		if err != nil {
 			fmt.Println("Worker connection lost:", err)
 			return
 		}
 
-		task = strings.TrimSpace(task)
-
-		fmt.Println("Worker received from server:", task) // ✅ Debugging
-
-		if !isValidTask(task) {
+		taskParts := strings.Fields(strings.TrimSpace(taskLine))
+		if len(taskParts) < 3 {
 			fmt.Println("Received malformed task. Ignoring.")
 			time.Sleep(time.Second)
 			continue
 		}
 
-		fmt.Println("Executing Task:", task)
-		result := executeTask(task)
+		taskID := taskParts[0]
+		operation := taskParts[1]
+		args := taskParts[2:]
 
-		fmt.Println("Sending result back to server:", result)
+		fmt.Println("Executing Task:", operation, args)
+		result := executeTask(operation, args)
 
-		_, err = conn.Write([]byte(result + "\n"))
+		response := "RESULT " + taskID + " " + result
+		_, err = conn.Write([]byte(response + "\n"))
 		if err != nil {
 			fmt.Println("Error sending response:", err)
 			return
@@ -68,30 +62,16 @@ func main() {
 	}
 }
 
-func isValidTask(task string) bool {
-	parts := strings.Fields(task)
-	if len(parts) < 3 {
-		return false
+func executeTask(operation string, args []string) string {
+	if operation == "Multiply" && len(args) == 2 {
+		return args[0] + " * " + args[1] + " = " + fmt.Sprintf("%d", multiply(args[0], args[1]))
 	}
-	return true
+	return "INVALID_TASK"
 }
 
-func executeTask(task string) string {
-	parts := strings.Split(task, " ")
-	if len(parts) < 3 {
-		return "Invalid task format"
-	}
-
-	if parts[0] == "Multiply" {
-		num1 := parseInt(parts[1])
-		num2 := parseInt(parts[2])
-		return fmt.Sprintf("Result: %d", num1*num2)
-	}
-	return "Unknown Task"
-}
-
-func parseInt(s string) int {
-	var num int
-	fmt.Sscanf(s, "%d", &num)
-	return num
+func multiply(a, b string) int {
+	var x, y int
+	fmt.Sscanf(a, "%d", &x)
+	fmt.Sscanf(b, "%d", &y)
+	return x * y
 }

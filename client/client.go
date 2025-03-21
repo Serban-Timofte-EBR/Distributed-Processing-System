@@ -4,29 +4,36 @@ import (
 	"bufio"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 )
 
-const (
-	serverAddress = "localhost:50051"
-)
-
 func main() {
-	conn, err := net.Dial("tcp", serverAddress)
+	conn, err := net.Dial("tcp", "127.0.0.1:50051")
 	if err != nil {
 		fmt.Println("Error connecting to server:", err)
 		return
 	}
 	defer conn.Close()
 
-	taskRequest := "Multiply 5 10\n"
-	fmt.Println("Sent Task:", strings.TrimSpace(taskRequest))
-	_, err = conn.Write([]byte(taskRequest))
+	fmt.Println("Enter task (e.g., 'Multiply 5 10'):")
+	reader := bufio.NewReader(os.Stdin)
+	task, _ := reader.ReadString('\n')
+	task = strings.TrimSpace(task)
+
+	_, err = conn.Write([]byte(task + "\n"))
 	if err != nil {
 		fmt.Println("Error sending task:", err)
 		return
 	}
 
-	response, _ := bufio.NewReader(conn).ReadString('\n')
-	fmt.Println("Response:", strings.TrimSpace(response))
+	serverReader := bufio.NewReader(conn)
+	result, err := serverReader.ReadString('\n')
+	if err != nil {
+		fmt.Println("Error receiving response:", err)
+		return
+	}
+
+	result = strings.TrimSpace(result)
+	fmt.Println("Received result from server:", result)
 }
