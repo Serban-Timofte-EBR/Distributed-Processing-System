@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
@@ -15,6 +16,20 @@ var (
 	taskResults = make(map[string]net.Conn)
 	queueMutex  sync.Mutex
 )
+
+const (
+	colorReset  = "\033[0m"
+	colorGreen  = "\033[32m"
+	colorBlue   = "\033[34m"
+	colorYellow = "\033[33m"
+	colorCyan   = "\033[36m"
+	colorRed    = "\033[31m"
+)
+
+func logLine(color string, msg string) {
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	fmt.Printf("%s[%s] %s%s\n", color, timestamp, msg, colorReset)
+}
 
 type Task struct {
 	ID        string
@@ -26,11 +41,11 @@ func addTaskToQueue(clientConn net.Conn, task string) {
 	queueMutex.Lock()
 	defer queueMutex.Unlock()
 
-	taskID := strconv.Itoa(len(taskResults) + 1) // TODO: Create a better ID system
+	taskID := strconv.Itoa(len(taskResults) + 1)
 	parts := strings.Fields(task)
 
 	if len(parts) < 3 {
-		fmt.Println("Error: Invalid task format.")
+		logLine(colorRed, "Error: Invalid task format.")
 		return
 	}
 
@@ -38,7 +53,7 @@ func addTaskToQueue(clientConn net.Conn, task string) {
 	taskQueue = append(taskQueue, newTask)
 	taskResults[taskID] = clientConn
 
-	fmt.Println("Task added to queue:", newTask.Operation, newTask.Args, " (Task ID:", taskID, ")")
+	logLine(colorBlue, fmt.Sprintf("Task added to queue: %s %v (Task ID: %s)", newTask.Operation, newTask.Args, taskID))
 }
 
 func sendResultToClient(taskID, result string) {
@@ -47,13 +62,13 @@ func sendResultToClient(taskID, result string) {
 	queueMutex.Unlock()
 
 	if exists {
-		fmt.Println("Sending result to client:", result)
+		logLine(colorCyan, fmt.Sprintf("Sending result to client: %s", result))
 		_, err := clientConn.Write([]byte(result + "\n"))
 		if err != nil {
-			fmt.Println("Error sending result to client:", err)
+			logLine(colorRed, "Error sending result to client: "+err.Error())
 		}
 	} else {
-		fmt.Println("No client found for Task ID:", taskID)
+		logLine(colorRed, "No client found for Task ID: "+taskID)
 	}
 }
 
@@ -63,44 +78,47 @@ func handleConnection(conn net.Conn) {
 	for {
 		message, err := reader.ReadString('\n')
 		if err != nil {
-			fmt.Println("Connection closed:", err)
+			logLine(colorRed, "Connection closed: "+err.Error())
 			conn.Close()
 			return
 		}
 		message = strings.TrimSpace(message)
 
-		if message == "REGISTER_WORKER" {
+		switch {
+		case message == "REGISTER_WORKER":
 			registerWorker(conn)
-		} else if message == "REQUEST_TASK" {
-			fmt.Println("Worker requested a task.")
+
+		case message == "REQUEST_TASK":
+			logLine(colorGreen, "Worker requested a task.")
 			task := getNextTask()
 
 			if task.ID != "" {
-				fmt.Println("Assigning task to worker:", task.Operation, task.Args, "(Task ID:", task.ID, ")")
+				logLine(colorYellow, fmt.Sprintf("Assigning task to worker: %s %v (Task ID: %s)", task.Operation, task.Args, task.ID))
 				taskStr := task.ID + " " + task.Operation + " " + strings.Join(task.Args, " ")
 				_, err := conn.Write([]byte(taskStr + "\n"))
 				if err != nil {
-					fmt.Println("Error sending task to worker:", err)
+					logLine(colorRed, "Error sending task to worker: "+err.Error())
 					conn.Close()
 					return
 				}
 			} else {
-				fmt.Println("No tasks available.")
+				logLine(colorYellow, "No tasks available. Sending NO_TASK.")
 				_, _ = conn.Write([]byte("NO_TASK\n"))
 			}
-		} else if strings.HasPrefix(message, "RESULT") {
+
+		case strings.HasPrefix(message, "RESULT"):
 			parts := strings.Fields(message)
 			if len(parts) < 3 {
-				fmt.Println("Malformed result received.")
+				logLine(colorRed, "Malformed result received.")
 				continue
 			}
 
 			taskID := parts[1]
 			result := strings.Join(parts[2:], " ")
-
-			fmt.Println("Received result from worker:", result)
+			logLine(colorCyan, fmt.Sprintf("Received result from worker (Task ID: %s): %s", taskID, result))
 			sendResultToClient(taskID, result)
-		} else {
+
+		default:
 			addTaskToQueue(conn, message)
 		}
 	}
@@ -123,15 +141,15 @@ func registerWorker(conn net.Conn) {
 	queueMutex.Lock()
 	workerPool = append(workerPool, conn)
 	queueMutex.Unlock()
-	fmt.Println("Worker registered:", conn.RemoteAddr().String())
+	logLine(colorGreen, "Worker registered: "+conn.RemoteAddr().String())
 }
 
 func main() {
-	fmt.Println("Task Server started on port 50051")
+	logLine(colorGreen, "Task Server started on port 50051")
 
 	listener, err := net.Listen("tcp", "127.0.0.1:50051")
 	if err != nil {
-		fmt.Println("Error starting server:", err)
+		logLine(colorRed, "Error starting server: "+err.Error())
 		return
 	}
 	defer listener.Close()
@@ -139,7 +157,7 @@ func main() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("Error accepting connection:", err)
+			logLine(colorRed, "Error accepting connection: "+err.Error())
 			continue
 		}
 		go handleConnection(conn)
