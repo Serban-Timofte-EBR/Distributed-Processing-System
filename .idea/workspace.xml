@@ -7,9 +7,12 @@
     <list default="true" id="f29b99f0-cf36-473b-9d9d-c2b9bf85ab79" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/client/client.go" beforeDir="false" afterPath="$PROJECT_DIR$/client/client.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/launcher.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/logs/Client-1.log" beforeDir="false" afterPath="$PROJECT_DIR$/logs/Client-1.log" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/logs/Client-2.log" beforeDir="false" afterPath="$PROJECT_DIR$/logs/Client-2.log" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/logs/Client-3.log" beforeDir="false" afterPath="$PROJECT_DIR$/logs/Client-3.log" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/logs/Client-4.log" beforeDir="false" afterPath="$PROJECT_DIR$/logs/Client-4.log" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/logs/Client-5.log" beforeDir="false" afterPath="$PROJECT_DIR$/logs/Client-5.log" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/server/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/server/server.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/worker/worker.go" beforeDir="false" afterPath="$PROJECT_DIR$/worker/worker.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

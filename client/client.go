@@ -9,22 +9,15 @@ import (
 	"time"
 )
 
-const (
-	colorReset = "\033[0m"
-	colorGreen = "\033[32m"
-	colorRed   = "\033[31m"
-	colorCyan  = "\033[36m"
-)
-
-func logLine(color string, label string, msg string) {
-	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	fmt.Printf("%s[%s] [%s] %s%s\n", color, timestamp, label, msg, colorReset)
-}
-
 func generateTasks() []string {
 	var tasks []string
+	priorities := []string{"LOW", "MEDIUM", "HIGH"}
+
 	for i := 1; i <= 50; i++ {
-		tasks = append(tasks, fmt.Sprintf("Multiply %d %d", i, i+1))
+		a := i
+		b := i + 1
+		priority := priorities[i%3] // switch between LOW, MEDIUM, HIGH
+		tasks = append(tasks, fmt.Sprintf("Multiply %d %d %s", a, b, priority))
 	}
 	return tasks
 }
@@ -34,25 +27,25 @@ func sendTask(task string, wg *sync.WaitGroup) {
 
 	conn, err := net.Dial("tcp", "127.0.0.1:50051")
 	if err != nil {
-		logLine(colorRed, "Client", "Eroare conectare: "+err.Error())
+		fmt.Println("[Client] Eroare conectare:", err)
 		return
 	}
 	defer conn.Close()
 
 	_, err = conn.Write([]byte(task + "\n"))
 	if err != nil {
-		logLine(colorRed, "Client", "Eroare trimitere task: "+err.Error())
+		fmt.Println("[Client] Eroare trimitere task:", err)
 		return
 	}
 
 	reader := bufio.NewReader(conn)
 	result, err := reader.ReadString('\n')
 	if err != nil {
-		logLine(colorRed, "Client", "Eroare primire răspuns: "+err.Error())
+		fmt.Println("[Client] Eroare primire răspuns:", err)
 		return
 	}
 
-	logLine(colorGreen, "Client", fmt.Sprintf("Sent: %-15s | Received: %s", task, strings.TrimSpace(result)))
+	fmt.Printf("[Client] Sent: %-25s | Received: %s\n", task, strings.TrimSpace(result))
 }
 
 func main() {
@@ -62,7 +55,7 @@ func main() {
 	for _, task := range tasks {
 		wg.Add(1)
 		go sendTask(task, &wg)
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	wg.Wait()
