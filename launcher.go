@@ -63,8 +63,6 @@ func runClient(id int, wg *sync.WaitGroup) {
 
 	if err := cmd.Wait(); err != nil {
 		fmt.Printf("[Launcher] Client-%d exited with error: %v\n", id, err)
-	} else {
-		fmt.Printf("[Launcher] Client-%d finished successfully.\n", id)
 	}
 }
 

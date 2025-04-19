@@ -40,19 +40,30 @@ func sendTask(task string, wg *sync.WaitGroup) {
 		return
 	}
 
-	reader := bufio.NewReader(conn)
-	result, err := reader.ReadString('\n')
+	response, err := bufio.NewReader(conn).ReadString('\n')
 	if err != nil {
-		fmt.Println("[Client] Eroare primire răspuns:", err)
+		fmt.Println("[Client] Failed to read response:", err)
 		return
 	}
+	fmt.Println("[Client] Received:", strings.TrimSpace(response))
 
-	fmt.Printf("[Client] Sent: %-25s | Received: %s\n", task, strings.TrimSpace(result))
+	fmt.Fprintf(conn, "UNREGISTER_CLIENT\n")
 }
 
 func main() {
 	var wg sync.WaitGroup
 	tasks := generateTasks()
+	conn, err := net.Dial("tcp", "127.0.0.1:50051")
+	if err != nil {
+		fmt.Println("Client: Nu s-a putut conecta la server:", err)
+		return
+	}
+
+	defer func() {
+		conn.Write([]byte("UNREGISTER_CLIENT\n")) // ✅ Trimite semnalul explicit
+		conn.Close()
+		fmt.Println("Client: Connection finished.")
+	}()
 
 	for _, task := range tasks {
 		wg.Add(1)

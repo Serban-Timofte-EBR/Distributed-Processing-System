@@ -167,6 +167,11 @@ func handleConnection(conn net.Conn) {
 			logInfo(Green, "RESULT", "Received from worker: "+result)
 			sendResultToClient(taskID, result)
 
+		case message == "UNREGISTER_CLIENT":
+			logInfo(Yellow, "CLIENT", "Client disconnected: "+conn.RemoteAddr().String())
+			conn.Close()
+			return
+
 		default:
 			addTaskToQueue(conn, message)
 		}

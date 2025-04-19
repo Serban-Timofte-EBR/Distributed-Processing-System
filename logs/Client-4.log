@@ -1,10 +1,11 @@
-[Client] Sent: Multiply 2 3 HIGH         | Received: 2 * 3 = 6
-[Client] Sent: Minus 1 2 MEDIUM          | Received: 1 - 2 = -1
-[Client] Sent: Minus 5 6 HIGH            | Received: 5 - 6 = -1
-[Client] Sent: Add 8 9 HIGH              | Received: 8 + 9 = 17
-[Client] Sent: Add 4 5 MEDIUM            | Received: 4 + 5 = 9
-[Client] Sent: Subtract 7 8 MEDIUM       | Received: 7 / 8 = 0
-[Client] Sent: Subtract 3 4 LOW          | Received: 3 / 4 = 0
-[Client] Sent: Multiply 6 7 LOW          | Received: 6 * 7 = 42
-[Client] Sent: Minus 9 10 LOW            | Received: 9 - 10 = -1
-[Client] Sent: Multiply 10 11 MEDIUM     | Received: 10 * 11 = 110
+[Client] Received: 2 * 3 = 6
+[Client] Received: 5 - 6 = -1
+[Client] Received: 1 - 2 = -1
+[Client] Received: 4 + 5 = 9
+[Client] Received: 7 / 8 = 0
+[Client] Received: 3 / 4 = 0
+[Client] Received: 6 * 7 = 42
+[Client] Received: 8 + 9 = 17
+[Client] Received: 10 * 11 = 110
+[Client] Received: 9 - 10 = -1
+Client: Connection finished.
