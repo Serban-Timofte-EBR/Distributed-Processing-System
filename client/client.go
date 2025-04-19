@@ -12,12 +12,14 @@ import (
 func generateTasks() []string {
 	var tasks []string
 	priorities := []string{"LOW", "MEDIUM", "HIGH"}
+	operations := []string{"Add", "Minus", "Multiply", "Subtract"}
 
-	for i := 1; i <= 50; i++ {
+	for i := 1; i <= 10; i++ {
 		a := i
 		b := i + 1
-		priority := priorities[i%3] // switch between LOW, MEDIUM, HIGH
-		tasks = append(tasks, fmt.Sprintf("Multiply %d %d %s", a, b, priority))
+		priority := priorities[i%3]  // switch between LOW, MEDIUM, HIGH
+		operation := operations[i%4] // cycle through Add, Minus, Multiply, Subtract
+		tasks = append(tasks, fmt.Sprintf("%s %d %d %s", operation, a, b, priority))
 	}
 	return tasks
 }

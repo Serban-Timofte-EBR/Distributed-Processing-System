@@ -80,6 +80,12 @@ func main() {
 func executeTask(operation string, args []string) string {
 	if operation == "Multiply" && len(args) == 2 {
 		return args[0] + " * " + args[1] + " = " + fmt.Sprintf("%d", multiply(args[0], args[1]))
+	} else if operation == "Add" && len(args) == 2 {
+		return args[0] + " + " + args[1] + " = " + fmt.Sprintf("%d", add(args[0], args[1]))
+	} else if operation == "Minus" && len(args) == 2 {
+		return args[0] + " - " + args[1] + " = " + fmt.Sprintf("%d", minus(args[0], args[1]))
+	} else if operation == "Subtract" && len(args) == 2 {
+		return args[0] + " / " + args[1] + " = " + fmt.Sprintf("%d", subtract(args[0], args[1]))
 	}
 	return "INVALID_TASK"
 }
@@ -89,4 +95,25 @@ func multiply(a, b string) int {
 	fmt.Sscanf(a, "%d", &x)
 	fmt.Sscanf(b, "%d", &y)
 	return x * y
+}
+
+func add(a, b string) int {
+	var x, y int
+	fmt.Sscanf(a, "%d", &x)
+	fmt.Sscanf(b, "%d", &y)
+	return x + y
+}
+
+func minus(a, b string) int {
+	var x, y int
+	fmt.Sscanf(a, "%d", &x)
+	fmt.Sscanf(b, "%d", &y)
+	return x - y
+}
+
+func subtract(a, b string) int {
+	var x, y int
+	fmt.Sscanf(a, "%d", &x)
+	fmt.Sscanf(b, "%d", &y)
+	return x / y
 }
