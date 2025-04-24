@@ -2,74 +2,81 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
+	"io"
+	"log"
+	"math/rand"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
 )
 
-func generateTasks() []string {
-	var tasks []string
-	priorities := []string{"LOW", "MEDIUM", "HIGH"}
-	operations := []string{"Add", "Minus", "Multiply", "Subtract"}
+var (
+	host        = flag.String("host", "127.0.0.1", "Server host")
+	port        = flag.Int("port", 50051, "Server port")
+	numTasks    = flag.Int("tasks", 10, "Number of tasks to generate")
+	delayMillis = flag.Int("delay", 100, "Delay between task submissions (ms)")
+	timeout     = flag.Int("timeout", 5, "Response timeout (seconds)")
+	logFile     = flag.String("log", "app-logs/client.log", "Path to client log file")
+)
 
-	for i := 1; i <= 10; i++ {
-		a := i
-		b := i + 1
-		priority := priorities[i%3]  // switch between LOW, MEDIUM, HIGH
-		operation := operations[i%4] // cycle through Add, Minus, Multiply, Subtract
-		tasks = append(tasks, fmt.Sprintf("%s %d %d %s", operation, a, b, priority))
+func init() {
+	f, err := os.OpenFile(*logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		log.Fatalf("Failed to open log file: %v", err)
+	}
+	log.SetOutput(io.MultiWriter(os.Stdout, f))
+	log.SetFlags(log.Ldate | log.Ltime)
+	rand.Seed(time.Now().UnixNano())
+}
+
+func generateTasks(n int) []string {
+	ops := []string{"Add", "Minus", "Multiply", "Subtract", "Power", "Mod"}
+	prios := []string{"LOW", "MEDIUM", "HIGH"}
+	var tasks []string
+	for i := 0; i < n; i++ {
+		a, b := rand.Intn(100), rand.Intn(100)
+		t := fmt.Sprintf("%s %d %d %s", ops[i%len(ops)], a, b, prios[i%len(prios)])
+		tasks = append(tasks, t)
 	}
 	return tasks
 }
 
 func sendTask(task string, wg *sync.WaitGroup) {
 	defer wg.Done()
-
-	conn, err := net.Dial("tcp", "127.0.0.1:50051")
+	address := fmt.Sprintf("%s:%d", *host, *port)
+	conn, err := net.Dial("tcp", address)
 	if err != nil {
-		fmt.Println("[Client] Eroare conectare:", err)
+		log.Println("Connection error:", err)
 		return
 	}
 	defer conn.Close()
 
-	_, err = conn.Write([]byte(task + "\n"))
-	if err != nil {
-		fmt.Println("[Client] Eroare trimitere task:", err)
-		return
-	}
+	log.Println("Sending task:", task)
+	conn.Write([]byte(task + "\n"))
 
-	response, err := bufio.NewReader(conn).ReadString('\n')
+	conn.SetReadDeadline(time.Now().Add(time.Duration(*timeout) * time.Second))
+	resp, _ := bufio.NewReader(conn).ReadString('\n')
 	if err != nil {
-		fmt.Println("[Client] Failed to read response:", err)
-		return
+		log.Printf("Read error (timeout=%ds): %v", *timeout, err)
+	} else {
+		log.Println("Received:", strings.TrimSpace(resp))
 	}
-	fmt.Println("[Client] Received:", strings.TrimSpace(response))
-
-	fmt.Fprintf(conn, "UNREGISTER_CLIENT\n")
+	conn.Write([]byte("UNREGISTER_CLIENT\n"))
 }
 
 func main() {
+	flag.Parse()
+	tasks := generateTasks(*numTasks)
 	var wg sync.WaitGroup
-	tasks := generateTasks()
-	conn, err := net.Dial("tcp", "127.0.0.1:50051")
-	if err != nil {
-		fmt.Println("Client: Nu s-a putut conecta la server:", err)
-		return
-	}
-
-	defer func() {
-		conn.Write([]byte("UNREGISTER_CLIENT\n")) // ✅ Trimite semnalul explicit
-		conn.Close()
-		fmt.Println("Client: Connection finished.")
-	}()
-
-	for _, task := range tasks {
+	for _, t := range tasks {
 		wg.Add(1)
-		go sendTask(task, &wg)
-		time.Sleep(100 * time.Millisecond)
+		go sendTask(t, &wg)
+		time.Sleep(time.Duration(*delayMillis) * time.Millisecond)
 	}
-
 	wg.Wait()
+	log.Println("All tasks completed.")
 }

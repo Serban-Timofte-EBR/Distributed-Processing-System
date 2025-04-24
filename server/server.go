@@ -2,8 +2,12 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
+	"io"
+	"log"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,183 +21,146 @@ type Task struct {
 }
 
 var (
-	highPriorityQueue   []Task
-	mediumPriorityQueue []Task
-	lowPriorityQueue    []Task
-	taskResults         = make(map[string]net.Conn)
-	workerPool          []net.Conn
-	queueMutex          sync.Mutex
+	host     = flag.String("host", "127.0.0.1", "Server host address")
+	port     = flag.Int("port", 50051, "Server listening port")
+	logFile  = flag.String("log", "app-logs/server.log", "Path to server log file")
+	queueMu  sync.Mutex
+	highQ    []Task
+	mediumQ  []Task
+	lowQ     []Task
+	results  = make(map[string]net.Conn)
 )
 
-const (
-	Reset   = "\033[0m"
-	Green   = "\033[32m"
-	Yellow  = "\033[33m"
-	Red     = "\033[31m"
-	Cyan    = "\033[36m"
-	Magenta = "\033[35m"
-)
-
-func logInfo(color, label, msg string) {
-	fmt.Printf("%s[SERVER][%s] %s%s\n", color, label, msg, Reset)
+func initLogger() {
+	f, err := os.OpenFile(*logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		log.Fatalf("Failed to open log file %s: %v", *logFile, err)
+	}
+	mw := io.MultiWriter(os.Stdout, f)
+	log.SetOutput(mw)
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 }
 
-func addTaskToQueue(clientConn net.Conn, task string) {
-	queueMutex.Lock()
-	defer queueMutex.Unlock()
+func logInfo(label, msg string) {
+	log.Printf("[SERVER][%s] %s", label, msg)
+}
 
-	taskID := strconv.Itoa(len(taskResults) + 1)
-	parts := strings.Fields(task)
-
+func addTask(conn net.Conn, taskLine string) {
+	parts := strings.Fields(taskLine)
 	if len(parts) < 4 {
-		logInfo(Red, "ERROR", "Invalid task format: "+task)
+		logInfo("ERROR", "Invalid task format: "+taskLine)
 		return
 	}
-
-	operation := parts[0]
+	op := parts[0]
 	args := parts[1 : len(parts)-1]
-	priority := strings.ToUpper(parts[len(parts)-1])
+	prio := strings.ToUpper(parts[len(parts)-1])
+	id := strconv.Itoa(len(results) + 1)
+		task := Task{ID: id, Operation: op, Args: args, Priority: prio}
 
-	newTask := Task{
-		ID:        taskID,
-		Operation: operation,
-		Args:      args,
-		Priority:  priority,
-	}
-
-	switch priority {
+	queueMu.Lock()
+	switch prio {
 	case "HIGH":
-		highPriorityQueue = append(highPriorityQueue, newTask)
-	case "MEDIUM":
-		mediumPriorityQueue = append(mediumPriorityQueue, newTask)
+		highQ = append(highQ, task)
 	case "LOW":
-		lowPriorityQueue = append(lowPriorityQueue, newTask)
+		lowQ = append(lowQ, task)
 	default:
-		logInfo(Yellow, "WARNING", "Unknown priority, defaulting to MEDIUM")
-		mediumPriorityQueue = append(mediumPriorityQueue, newTask)
+		mediumQ = append(mediumQ, task)
 	}
+	results[id] = conn
+	queueMu.Unlock()
 
-	taskResults[taskID] = clientConn
-
-	logInfo(Cyan, "TASK_ADDED", fmt.Sprintf("%s %v [ID: %s] → [%s]", operation, args, taskID, priority))
+	logInfo("TASK_ADDED", fmt.Sprintf("%s %v [ID:%s] Priority:%s", op, args, id, prio))
 }
 
-func getNextTask() Task {
-	queueMutex.Lock()
-	defer queueMutex.Unlock()
-
-	if len(highPriorityQueue) > 0 {
-		task := highPriorityQueue[0]
-		highPriorityQueue = highPriorityQueue[1:]
-		return task
+func getNext() *Task {
+	queueMu.Lock()
+	defer queueMu.Unlock()
+	if len(highQ) > 0 {
+		t := highQ[0]
+		highQ = highQ[1:]
+		return &t
 	}
-	if len(mediumPriorityQueue) > 0 {
-		task := mediumPriorityQueue[0]
-		mediumPriorityQueue = mediumPriorityQueue[1:]
-		return task
+	if len(mediumQ) > 0 {
+		t := mediumQ[0]
+		mediumQ = mediumQ[1:]
+		return &t
 	}
-	if len(lowPriorityQueue) > 0 {
-		task := lowPriorityQueue[0]
-		lowPriorityQueue = lowPriorityQueue[1:]
-		return task
+	if len(lowQ) > 0 {
+		t := lowQ[0]
+		lowQ = lowQ[1:]
+		return &t
 	}
-	return Task{}
+	return nil
 }
 
-func sendResultToClient(taskID, result string) {
-	queueMutex.Lock()
-	clientConn, exists := taskResults[taskID]
-	queueMutex.Unlock()
-
-	if exists {
-		logInfo(Green, "RESULT", fmt.Sprintf("Sending result for Task ID %s → %s", taskID, result))
-		_, err := clientConn.Write([]byte(result + "\n"))
-		if err != nil {
-			logInfo(Red, "ERROR", "Sending result failed: "+err.Error())
-		}
-	} else {
-		logInfo(Red, "ERROR", "No client found for Task ID: "+taskID)
-	}
-}
-
-func registerWorker(conn net.Conn) {
-	queueMutex.Lock()
-	workerPool = append(workerPool, conn)
-	queueMutex.Unlock()
-	logInfo(Magenta, "WORKER", "Registered: "+conn.RemoteAddr().String())
-}
-
-func handleConnection(conn net.Conn) {
-	reader := bufio.NewReader(conn)
-
+func handleConn(conn net.Conn) {
+	defer conn.Close()
+	r := bufio.NewReader(conn)
 	for {
-		message, err := reader.ReadString('\n')
+		line, err := r.ReadString('\n')
 		if err != nil {
-			logInfo(Yellow, "CLOSED", "Connection closed: "+err.Error())
-			conn.Close()
+			logInfo("CLOSED", fmt.Sprintf("%s", err))
 			return
 		}
-		message = strings.TrimSpace(message)
-
+		msg := strings.TrimSpace(line)
 		switch {
-		case message == "REGISTER_WORKER":
-			registerWorker(conn)
+		case msg == "REGISTER_WORKER":
+			logInfo("WORKER", "Registered " + conn.RemoteAddr().String())
 
-		case message == "REQUEST_TASK":
-			logInfo(Magenta, "WORKER", "Requested task")
-			task := getNextTask()
-
-			if task.ID != "" {
-				logInfo(Cyan, "ASSIGN", fmt.Sprintf("Sending task [%s] to worker → %s %v", task.Priority, task.Operation, task.Args))
-				taskStr := task.ID + " " + task.Operation + " " + strings.Join(task.Args, " ")
-				_, err := conn.Write([]byte(taskStr + "\n"))
-				if err != nil {
-					logInfo(Red, "ERROR", "Sending task failed: "+err.Error())
-					conn.Close()
-					return
-				}
+		case msg == "REQUEST_TASK":
+			t := getNext()
+			if t != nil {
+				payload := fmt.Sprintf("%s %s %s", t.ID, t.Operation, strings.Join(t.Args, " "))
+				conn.Write([]byte(payload + "\n"))
+				logInfo("ASSIGN", payload)
 			} else {
-				_, _ = conn.Write([]byte("NO_TASK\n"))
+				conn.Write([]byte("NO_TASK\n"))
 			}
 
-		case strings.HasPrefix(message, "RESULT"):
-			parts := strings.Fields(message)
+		case strings.HasPrefix(msg, "RESULT"):
+			parts := strings.Fields(msg)
 			if len(parts) < 3 {
-				logInfo(Yellow, "WARNING", "Malformed result received")
+				logInfo("ERROR", "Malformed result: "+msg)
 				continue
 			}
-			taskID := parts[1]
-			result := strings.Join(parts[2:], " ")
-			logInfo(Green, "RESULT", "Received from worker: "+result)
-			sendResultToClient(taskID, result)
+			id := parts[1]
+			res := strings.Join(parts[2:], " ")
+			logInfo("RESULT", fmt.Sprintf("Task %s → %s", id, res))
+			if client, ok := results[id]; ok {
+				client.Write([]byte(res + "\n"))
+				delete(results, id)
+			} else {
+				logInfo("ERROR", "No client for Task ID "+id)
+			}
 
-		case message == "UNREGISTER_CLIENT":
-			logInfo(Yellow, "CLIENT", "Client disconnected: "+conn.RemoteAddr().String())
-			conn.Close()
+		case msg == "UNREGISTER_CLIENT":
+			logInfo("CLIENT", "Disconnected "+conn.RemoteAddr().String())
 			return
 
 		default:
-			addTaskToQueue(conn, message)
+			addTask(conn, msg)
 		}
 	}
 }
 
 func main() {
-	logInfo(Cyan, "START", "Task Server started on port 50051")
+	flag.Parse()
+	initLogger()
+	addr := fmt.Sprintf("%s:%d", *host, *port)
+	logInfo("START", "Listening on " + addr)
 
-	listener, err := net.Listen("tcp", "127.0.0.1:50051")
+	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		logInfo(Red, "FATAL", "Error starting server: "+err.Error())
-		return
+		log.Fatalf("Failed to bind to %s: %v", addr, err)
 	}
-	defer listener.Close()
+	defer ln.Close()
 
 	for {
-		conn, err := listener.Accept()
+		conn, err := ln.Accept()
 		if err != nil {
-			logInfo(Red, "ERROR", "Accept connection failed: "+err.Error())
+			logInfo("ERROR", err.Error())
 			continue
 		}
-		go handleConnection(conn)
+		go handleConn(conn)
 	}
 }

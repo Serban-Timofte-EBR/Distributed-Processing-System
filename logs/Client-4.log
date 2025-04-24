@@ -1,11 +1,21 @@
-[Client] Received: 2 * 3 = 6
-[Client] Received: 5 - 6 = -1
-[Client] Received: 1 - 2 = -1
-[Client] Received: 4 + 5 = 9
-[Client] Received: 7 / 8 = 0
-[Client] Received: 3 / 4 = 0
-[Client] Received: 6 * 7 = 42
-[Client] Received: 8 + 9 = 17
-[Client] Received: 10 * 11 = 110
-[Client] Received: 9 - 10 = -1
-Client: Connection finished.
+2025/04/24 20:28:34 Sending task: Add 96 11 LOW
+2025/04/24 20:28:34 Received: 96 + 11 = 107
+2025/04/24 20:28:34 Sending task: Minus 85 25 MEDIUM
+2025/04/24 20:28:34 Sending task: Multiply 54 90 HIGH
+2025/04/24 20:28:34 Sending task: Subtract 17 63 LOW
+2025/04/24 20:28:34 Sending task: Power 33 30 MEDIUM
+2025/04/24 20:28:34 Sending task: Mod 9 62 HIGH
+2025/04/24 20:28:34 Sending task: Add 89 38 LOW
+2025/04/24 20:28:34 Sending task: Minus 30 11 MEDIUM
+2025/04/24 20:28:34 Sending task: Multiply 75 89 HIGH
+2025/04/24 20:28:35 Sending task: Subtract 18 67 LOW
+2025/04/24 20:28:35 Received: 54 * 90 = 4860
+2025/04/24 20:28:35 Received: 9 % 62 = 9
+2025/04/24 20:28:35 Received: 75 * 89 = 6675
+2025/04/24 20:28:35 Received: 85 - 25 = 60
+2025/04/24 20:28:35 Received: 33 ^ 30 = -896348285281447999
+2025/04/24 20:28:35 Received: 30 - 11 = 19
+2025/04/24 20:28:35 Received: 17 / 63 = 0
+2025/04/24 20:28:35 Received: 89 + 38 = 127
+2025/04/24 20:28:35 Received: 18 / 67 = 0
+2025/04/24 20:28:35 All tasks completed.

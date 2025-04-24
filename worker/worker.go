@@ -2,118 +2,103 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
+	"io"
+	"log"
 	"net"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 )
 
-const (
-	colorReset  = "\033[0m"
-	colorGreen  = "\033[32m"
-	colorCyan   = "\033[36m"
-	colorYellow = "\033[33m"
-	colorRed    = "\033[31m"
+
+var (
+	host    = flag.String("host", "127.0.0.1", "Server host")
+	port    = flag.Int("port", 50051, "Server port")
+	logFile = flag.String("log", "app-logs/worker.log", "Path to worker log file")
 )
 
-func logLine(color string, msg string) {
-	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	fmt.Printf("%s[%s] %s%s\n", color, timestamp, msg, colorReset)
+func init() {
+	f, err := os.OpenFile(*logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		fmt.Println("Failed to open log file:", err)
+		os.Exit(1)
+	}
+	mw := io.MultiWriter(os.Stdout, f)
+	log.SetOutput(mw)
+	log.SetFlags(log.Ldate | log.Ltime)
 }
 
-func main() {
-	conn, err := net.Dial("tcp", "127.0.0.1:50051")
-	if err != nil {
-		logLine(colorRed, "Eroare conectare la server: "+err.Error())
-		return
-	}
-	defer conn.Close()
-
-	logLine(colorGreen, "Task Worker connected.")
-	_, err = conn.Write([]byte("REGISTER_WORKER\n"))
-	if err != nil {
-		logLine(colorRed, "Eroare trimitere mesaj REGISTER_WORKER: "+err.Error())
-		return
-	}
-
-	reader := bufio.NewReader(conn)
-
-	for {
-		logLine(colorCyan, "Worker requesting task from server...")
-		_, err = conn.Write([]byte("REQUEST_TASK\n"))
-		if err != nil {
-			logLine(colorRed, "Eroare trimitere mesaj REQUEST_TASK: "+err.Error())
-			return
-		}
-
-		taskLine, err := reader.ReadString('\n')
-		if err != nil {
-			logLine(colorRed, "Worker connection lost: "+err.Error())
-			return
-		}
-
-		taskParts := strings.Fields(strings.TrimSpace(taskLine))
-		if len(taskParts) < 3 {
-			logLine(colorYellow, "Received malformed task. Ignoring.")
-			time.Sleep(time.Second)
-			continue
-		}
-
-		taskID := taskParts[0]
-		operation := taskParts[1]
-		args := taskParts[2:]
-
-		logLine(colorCyan, fmt.Sprintf("Executing Task: %s %s", operation, strings.Join(args, " ")))
-		result := executeTask(operation, args)
-
-		response := "RESULT " + taskID + " " + result
-		logLine(colorGreen, "Sending result back to server: "+result)
-
-		_, err = conn.Write([]byte(response + "\n"))
-		if err != nil {
-			logLine(colorRed, "Eroare trimitere rezultat: "+err.Error())
-			return
-		}
-	}
+func logLine(msg string) {
+	log.Printf("%s", msg)
 }
 
-func executeTask(operation string, args []string) string {
-	if operation == "Multiply" && len(args) == 2 {
-		return args[0] + " * " + args[1] + " = " + fmt.Sprintf("%d", multiply(args[0], args[1]))
-	} else if operation == "Add" && len(args) == 2 {
-		return args[0] + " + " + args[1] + " = " + fmt.Sprintf("%d", add(args[0], args[1]))
-	} else if operation == "Minus" && len(args) == 2 {
-		return args[0] + " - " + args[1] + " = " + fmt.Sprintf("%d", minus(args[0], args[1]))
-	} else if operation == "Subtract" && len(args) == 2 {
-		return args[0] + " / " + args[1] + " = " + fmt.Sprintf("%d", subtract(args[0], args[1]))
+func executeTask(op string, args []string) string {
+	x, y := toInt(args[0]), toInt(args[1])
+	switch op {
+	case "Add":
+		return fmt.Sprintf("%d + %d = %d", x, y, x+y)
+	case "Minus":
+		return fmt.Sprintf("%d - %d = %d", x, y, x-y)
+	case "Multiply":
+		return fmt.Sprintf("%d * %d = %d", x, y, x*y)
+	case "Subtract":
+		return fmt.Sprintf("%d / %d = %d", x, y, x/y)
+	case "Power":
+		return fmt.Sprintf("%d ^ %d = %d", x, y, pow(x, y))
+	case "Mod":
+		return fmt.Sprintf("%d %% %d = %d", x, y, x%y)
 	}
 	return "INVALID_TASK"
 }
 
-func multiply(a, b string) int {
-	var x, y int
-	fmt.Sscanf(a, "%d", &x)
-	fmt.Sscanf(b, "%d", &y)
-	return x * y
+func toInt(s string) int {
+	i, _ := strconv.Atoi(s)
+	return i
 }
 
-func add(a, b string) int {
-	var x, y int
-	fmt.Sscanf(a, "%d", &x)
-	fmt.Sscanf(b, "%d", &y)
-	return x + y
+func pow(a, b int) int {
+	result := 1
+	for i := 0; i < b; i++ {
+		result *= a
+	}
+	return result
 }
 
-func minus(a, b string) int {
-	var x, y int
-	fmt.Sscanf(a, "%d", &x)
-	fmt.Sscanf(b, "%d", &y)
-	return x - y
-}
+func main() {
+	flag.Parse()
+	address := fmt.Sprintf("%s:%d", *host, *port)
+	conn, err := net.Dial("tcp", address)
+	if err != nil {
+		logLine("Error connecting to server: " + err.Error())
+		return
+	}
+	defer conn.Close()
 
-func subtract(a, b string) int {
-	var x, y int
-	fmt.Sscanf(a, "%d", &x)
-	fmt.Sscanf(b, "%d", &y)
-	return x / y
+	logLine("Worker connected to " + address)
+	conn.Write([]byte("REGISTER_WORKER\n"))
+
+	r := bufio.NewReader(conn)
+	for {
+		logLine("Requesting task...")
+		conn.Write([]byte("REQUEST_TASK\n"))
+		line, err := r.ReadString('\n')
+		if err != nil {
+			logLine("Connection lost: " + err.Error())
+			return
+		}
+
+		parts := strings.Fields(strings.TrimSpace(line))
+		if len(parts) < 3 {
+			time.Sleep(time.Second)
+			continue
+		}
+		id, op, args := parts[0], parts[1], parts[2:]
+		logLine(fmt.Sprintf("Executing [%s]: %v", id, parts[1:]))
+		res := executeTask(op, args)
+		logLine("Sending result: " + res)
+		conn.Write([]byte(fmt.Sprintf("RESULT %s %s\n", id, res)))
+	}
 }

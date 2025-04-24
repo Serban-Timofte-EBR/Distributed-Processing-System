@@ -1,23 +1,24 @@
 package main
 
 import (
-	"bufio"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 )
 
-const (
-	numClients = 5
-	clientPath = "client/client.go"
-	logDir     = "logs"
+var (
+	clientPath = flag.String("client", "client/client.go", "Path to the client application")
+	logDir     = flag.String("logDir", "logs", "Directory for client logs")
+	numClients = flag.Int("clients", 5, "Number of clients to launch in parallel")
 )
 
 func runClient(id int, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	logFilePath := fmt.Sprintf("%s/Client-%d.log", logDir, id)
+	logFilePath := filepath.Join(*logDir, fmt.Sprintf("Client-%d.log", id))
 	logFile, err := os.Create(logFilePath)
 	if err != nil {
 		fmt.Printf("[Launcher] Error creating log file for Client-%d: %v\n", id, err)
@@ -25,7 +26,7 @@ func runClient(id int, wg *sync.WaitGroup) {
 	}
 	defer logFile.Close()
 
-	cmd := exec.Command("go", "run", clientPath)
+	cmd := exec.Command("go", "run", *clientPath)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -44,20 +45,32 @@ func runClient(id int, wg *sync.WaitGroup) {
 	}
 
 	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			line := scanner.Text()
-			fmt.Printf("[Client-%d] %s\n", id, line)
-			logFile.WriteString(line + "\n")
+		buf := make([]byte, 1024)
+		for {
+			n, err := stdout.Read(buf)
+			if n > 0 {
+				extra := string(buf[:n])
+				fmt.Printf("[Client-%d] %s", id, extra)
+				logFile.Write(buf[:n])
+			}
+			if err != nil {
+				break
+			}
 		}
 	}()
 
 	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			line := scanner.Text()
-			fmt.Printf("[Client-%d][ERROR] %s\n", id, line)
-			logFile.WriteString("[ERROR] " + line + "\n")
+		buf := make([]byte, 1024)
+		for {
+			n, err := stderr.Read(buf)
+			if n > 0 {
+				extra := string(buf[:n])
+				fmt.Printf("[Client-%d][ERROR] %s", id, extra)
+				logFile.WriteString("[ERROR] " + extra)
+			}
+			if err != nil {
+				break
+			}
 		}
 	}()
 
@@ -67,18 +80,19 @@ func runClient(id int, wg *sync.WaitGroup) {
 }
 
 func main() {
-	if _, err := os.Stat(logDir); os.IsNotExist(err) {
-		err := os.Mkdir(logDir, 0755)
-		if err != nil {
+	flag.Parse()
+
+	if _, err := os.Stat(*logDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(*logDir, 0755); err != nil {
 			fmt.Println("[Launcher] Failed to create logs directory:", err)
 			return
 		}
 	}
 
-	var wg sync.WaitGroup
-	fmt.Printf("[Launcher] Launching %d parallel clients...\n\n", numClients)
+	fmt.Printf("[Launcher] Launching %d parallel clients (path: %s)...\n\n", *numClients, *clientPath)
 
-	for i := 1; i <= numClients; i++ {
+	var wg sync.WaitGroup
+	for i := 1; i <= *numClients; i++ {
 		wg.Add(1)
 		go runClient(i, &wg)
 	}
